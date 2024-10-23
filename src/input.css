@@ -13,3 +13,46 @@
 .shake {
   animation: shake 0.5s;
 }
+
+
+.spin-down-animation {
+  animation: spinDown 1s infinite;
+}
+
+.spin-down-animation-stopped {
+  animation: none;
+}
+
+@keyframes spinDown {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(100%);
+  }
+}
+
+.slot-reel {
+  overflow: hidden;
+  height: 240px; /* Adjust the height for 3 rows (each symbol 80px) */
+}
+
+.symbol {
+  width: 80px;
+  height: 80px;
+  text-align: center;
+}
+
+.grow-shrink {
+  animation: growShrink 0.5s ease-in-out infinite;
+}
+
+@keyframes growShrink {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+

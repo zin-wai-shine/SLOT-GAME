@@ -1,130 +1,186 @@
 import React, { useEffect, useState } from 'react';
 import Paylines from './PayLines';
+import WinningLines from './WinningLines';
+import BetOptions from './BetOptions';
+import { FaArrowsSpin } from "react-icons/fa6";
+import { motion } from "framer-motion";
+import spinSound from '../song/mixkit-slot-machine-wheel-1932.wav';
+import winSound from '../song/mixkit-slot-machine-win-alert-1931.wav';
+import loseSound from '../song/mixkit-retro-arcade-lose-2027.wav';
+import Symbols from './Symbols'; // Import the new Symbols array with SVGs
 
-const symbols = ["🍒", "🍋", "🍊", "🔔", "⭐", "🍉"];
+const SPIN_DURATION = 2000;
 
 export default function SlotMachine() {
-  const columnWidth = 80;  // Adjust based on actual width of your grid columns
-  const rowHeight = 80;    // Adjust based on actual height of your grid rows
-
-  // Initialize Reels
   const initializeReels = () => {
     return Array.from({ length: 5 }, () =>
-      Array.from({ length: 3 }, () => symbols[Math.floor(Math.random() * symbols.length)])
+      Array.from({ length: 3 }, () => Symbols[Math.floor(Math.random() * Symbols.length)])
     );
   };
 
-  // Reels State
   const [reels, setReels] = useState(initializeReels());
+  const [isSpinning, setIsSpinning] = useState(false);
   const [winningCombination, setWinningCombination] = useState([]);
   const [showLines, setShowLines] = useState(false);
+  const [betAmount, setBetAmount] = useState(1);
+  const [activePaylines, setActivePaylines] = useState(1);
+  const [autoSpin, setAutoSpin] = useState(false);
 
-  // Check Win
+  const startSpinSound = new Audio(spinSound);
+  const startWinSound = new Audio(winSound);
+  const startLoseSound = new Audio(loseSound);
+
+  const smoothScrollReel = (reelIndex, finalSymbols) => {
+    setShowLines(false);
+    const maxSpins = SPIN_DURATION / 100;
+    let spinCount = 0;
+
+    const scrollInterval = setInterval(() => {
+      setReels(prevReels => {
+        const updatedReels = [...prevReels];
+        updatedReels[reelIndex] = [
+          Symbols[Math.floor(Math.random() * Symbols.length)],
+          ...updatedReels[reelIndex].slice(0, -1),
+        ];
+        return updatedReels;
+      });
+
+      spinCount++;
+
+      if (spinCount >= maxSpins) {
+        clearInterval(scrollInterval);
+        setReels(prevReels => {
+          const updatedReels = [...prevReels];
+          updatedReels[reelIndex] = finalSymbols;
+          return updatedReels;
+        });
+      }
+    }, 100);
+  };
+
+  const spinReels = () => {
+    startSpinSound.play();
+    setIsSpinning(true);
+    const newReels = initializeReels();
+
+    newReels.forEach((reel, reelIndex) => {
+      setTimeout(() => {
+        smoothScrollReel(reelIndex, reel);
+      }, reelIndex * 500);
+    });
+
+    setTimeout(() => {
+      checkWin(newReels);
+      setIsSpinning(false);
+    }, SPIN_DURATION + 500 * (newReels.length - 1));
+  };
+
   const checkWin = (newReels) => {
     const matches = Paylines.filter(payline => {
-      const [firstRow] = newReels.map(row => row[payline[0][1]]);
+      const firstSymbol = newReels[payline[0][0]][payline[0][1]];
+
       return payline.every(([reelIndex, rowIndex]) => {
         return (
           reelIndex < newReels.length &&
           rowIndex < newReels[reelIndex].length &&
-          newReels[reelIndex][rowIndex] === firstRow
+          newReels[reelIndex][rowIndex] === firstSymbol
         );
       });
     });
 
     if (matches.length > 0) {
-      const timeout = setTimeout(() => {
-        setShowLines(true);
-      }, 1000);
+      startWinSound.play();
+      setShowLines(true);
+      setTimeout(() => {
+        setShowLines(false);
+      }, startWinSound.duration * 1000);
       setWinningCombination(matches[0]);
-      return () => clearTimeout(timeout);
-       // Highlight the first winning line found
     } else {
+      startLoseSound.play();
       setWinningCombination([]);
     }
   };
 
-  const spinReels = () => {
-    const newReels = initializeReels();
-    setReels(newReels);
-    checkWin(newReels);
-  };
-
-
-  // Get the coordinates of the winning symbols
   const getWinningCoords = () => {
+    const symbolWidth = 80;
+    const symbolHeight = 80;
+  
     return winningCombination.map(([reelIndex, rowIndex]) => ({
-      x: reelIndex * columnWidth + columnWidth / 2, // Center the dot in the column
-      y: rowIndex * rowHeight + rowHeight / 2,      // Center the dot in the row
+      x: reelIndex * symbolWidth + symbolWidth / 2,
+      y: rowIndex * symbolHeight + symbolHeight / 2,
     }));
   };
 
-  // Draw lines and dots based on winning coordinates
-  const renderLinesAndDots = () => {
-    const coords = getWinningCoords();
-    return (
-      <svg className="absolute z-0 inset-0 w-full h-full pointer-events-none">
-        {/* Draw Dots */}
-        {coords.map((coord, index) => (
-          <circle
-            key={`dot-${index}`}
-            cx={coord.x}
-            cy={coord.y}
-            r="1" // Radius of the dot
-            fill="red" // Color of the dot
-          />
-        ))}
-
-        {/* Draw Lines */}
-        {coords.map((coord, index) => (
-          index < coords.length - 1 && (
-            <line
-              key={`line-${index}`}
-              x1={coord.x}
-              y1={coord.y}
-              x2={coords[index + 1].x}
-              y2={coords[index + 1].y}
-              stroke="grey" // Color of the line
-              strokeWidth="3"
-              strokeLinecap="round"
-            />
-          )
-        ))}
-      </svg>
-    );
-  };
+  useEffect(() => {
+    let autoSpinInterval;
+    if (autoSpin && !isSpinning) {
+      autoSpinInterval = setInterval(() => {
+        if (!isSpinning) {
+          spinReels();
+        }
+      }, SPIN_DURATION + 500);
+    }
+    return () => {
+      clearInterval(autoSpinInterval);
+    };
+  }, [autoSpin, isSpinning]);
 
   return (
-    <div className="relative flex flex-col items-center justify-center h-screen bg-gray-100">
-      <div className="relative grid grid-cols-5 h-60">
-      
-      {showLines && (
-        renderLinesAndDots()
-      )}
+    <div className="relative flex flex-col items-center justify-center h-screen bg-slate-600">
+      <div className="relative grid grid-cols-5 w-[40%] h-60">
+        {/* {showLines && <WinningLines coords={getWinningCoords()} />} */}
         {reels.map((column, colIndex) => (
-          <div
-            key={colIndex}
-            className={`flex flex-col gap-3  justify-center items-center w-20 ${colIndex % 2 === 0 ? 'bg-blue-200' : 'bg-green-200'}`}
-          >
+          <div key={colIndex} className={`slot-reel flex flex-col gap-3 justify-center items-center w-20`}>
             {column.map((symbol, rowIndex) => (
               <div
                 key={`${rowIndex}-${colIndex}`}
-                className={`flex items-center z-10 justify-center w-16 h-16 ${
-                  winningCombination.some(([r, c]) => r === colIndex && c === rowIndex) ? "shake" : ""
+                className={`symbol ${
+                  winningCombination.some(([r, c]) => r === colIndex && c === rowIndex)
+                    ? (showLines ? "grow-shrink" : "")
+                    : ""
                 }`}
               >
-                {symbol}
+                <img src={symbol} alt={`slot-symbol-${rowIndex}`} className="h-16 w-16" />
               </div>
             ))}
           </div>
         ))}
       </div>
-      <button
-        onClick={spinReels}
-        className="mt-6 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-      >
-        Spin
-      </button>
+
+      <div className='flex justify-center items-end gap-10 mt-5'>
+        <BetOptions
+          betAmount={betAmount}
+          setBetAmount={setBetAmount}
+          activePaylines={activePaylines}
+          setActivePaylines={setActivePaylines}
+        />
+
+        <div className='flex justify-center items-end gap-1'>
+          <button
+            className={`h-10 bg-gradient-to-r ${autoSpin ? "text-red-500" : "text-white"} from-blue-500 via-blue-600 to-blue-700 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-blue-300 dark:focus:ring-blue-800 font-medium rounded-lg px-5 text-center me-2`}
+            onClick={() => setAutoSpin(!autoSpin)}
+          >
+            Auto
+          </button>
+
+          <button
+            onClick={spinReels}
+            className="h-10 text-white bg-gradient-to-r text-2xl from-blue-500 via-blue-600 to-blue-700 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-blue-300 dark:focus:ring-blue-800 font-medium rounded-lg px-5 text-center me-2"
+            disabled={isSpinning}
+          >
+            {isSpinning ? (
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ ease: "linear", duration: 2, repeat: Infinity }}
+              >
+                <FaArrowsSpin />
+              </motion.div>
+            ) : (
+              <FaArrowsSpin />
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
